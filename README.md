@@ -23,3 +23,5 @@ Obs: eu nem uso ele☠️☠️, o programa do gringo/FubyCutie é mais eficient
 Inclusive, eu uso uma versão modificada dele, que consegue encontrar ilhas em 15 seeds diferentes e gerar um relatório para cada uma
 Cada programa tem sua importância, se lembre de que não existe um "programa universal"
 Acredito que seja isso por enquanto
+
+Não se esqueça dos arquivos Java, sem eles não existe nada disso
