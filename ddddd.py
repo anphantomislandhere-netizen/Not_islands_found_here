@@ -35,12 +35,16 @@ from jpype.types import JInt, JDouble
 # =====================================================================
 CAMINHO_BIN = r"C:\Users\Pichau\Desktop\wqgrf\bin\minecraft"
 PASTA_PROJETO = r"C:\Users\Pichau\Desktop\wqgrf"
-SEED = 12
+SEED = 15
+
+# TRAVA DE MAPAS VAZIOS: 
+# 1 = Pula áreas sem ilha (não gera PNG/CSV) | 0 = Gera tudo
+DESLIGAR_MA = 0   
 
 PERIODO_CHUNKS = 3064
 
 ILHAS_CONHECIDAS = [
-    (6080, 23680, "ilha confirmada 1"),
+    (18528, 9696, "ilha confirmada 1"),
 ]
 
 jars_encontrados = glob.glob(os.path.join(PASTA_PROJETO, "**", "*.jar"), recursive=True)
@@ -414,11 +418,15 @@ if __name__ == "__main__":
 
     DESLOCAMENTO_BLOCOS = PERIODO_CHUNKS * 16  # 3064 chunks * 16 = 49024 blocos
 
+    RAIOO = 0
+
     ramos = [
-        (X_BASE, Z_BASE),
-        (X_BASE + DESLOCAMENTO_BLOCOS, Z_BASE),
-        (X_BASE, Z_BASE + DESLOCAMENTO_BLOCOS),
-        (X_BASE + DESLOCAMENTO_BLOCOS, Z_BASE + DESLOCAMENTO_BLOCOS),
+    (
+        X_BASE + n * DESLOCAMENTO_BLOCOS,
+        Z_BASE + m * DESLOCAMENTO_BLOCOS
+    )
+    for n in range(-RAIOO, RAIOO + 1)
+    for m in range(-RAIOO, RAIOO + 1)
     ]
 
     for indice, (x_ramo, z_ramo) in enumerate(ramos, start=1):
@@ -427,8 +435,16 @@ if __name__ == "__main__":
 
         grade_lattice, grade_necessidade, grade_macro = varrer_para_mapa(
             cx_centro - RAIO, cx_centro + RAIO, cz_centro - RAIO, cz_centro + RAIO,
-            n_processos=8,
+            n_processos=7,
         )
+
+        # -----------------------------------------------------------------
+        # AQUI ESTÁ A TRAVA MAGNÍFICA
+        # -----------------------------------------------------------------
+        if DESLIGAR_MA == 1 and grade_lattice.max() <= 0:
+            print(f"⚠️ Ramo {indice} IGNORADO: Sem ilhas na região (max = {grade_lattice.max():.2f}). Pulando criação de PNG e CSV.")
+            continue
+        # -----------------------------------------------------------------
 
         marcador = [(x_ramo, z_ramo, NOME_BASE)]
         gerar_mapa_calor(grade_lattice, grade_necessidade, cx_centro - RAIO, cz_centro - RAIO,
