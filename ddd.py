@@ -54,7 +54,7 @@ _BLOCO_AR = Blocks.air  # referência canônica real, não amostrada
 # =====================================================================
 # 3. INSTANCIAR O GERADOR (só uma vez)
 # =====================================================================
-seed_real = 12
+seed_real = 15
 seed_mundo = jpype.JLong(seed_real)
 world_obj = None
 provider = ChunkProviderEnd(world_obj, seed_mundo)
@@ -226,9 +226,9 @@ def buscar(centro_x: int, centro_z: int, raio_chunks: int, y_min: int, y_max: in
 # 7. EXECUÇÃO
 # =====================================================================
 if __name__ == "__main__":
-    centro_x, centro_z = -17792, -21120
+    centro_x, centro_z = 18224, 7536
     raio_chunks = 50
-    y_min, y_max = 40, 80
+    y_min, y_max = 0, 80
 
     print(f"🔍 Buscando num raio de {raio_chunks} chunks ao redor de X={centro_x}, Z={centro_z}...")
     resultados = buscar(centro_x, centro_z, raio_chunks, y_min, y_max)
