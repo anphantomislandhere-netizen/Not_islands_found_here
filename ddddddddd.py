@@ -20,6 +20,7 @@ Funcionalidades incluídas (tudo que foi útil até aqui):
   - exportação da grade bruta em CSV, pra reanalisar sem rodar de novo
   - multiprocessing (uma JVM por processo) na fase de varredura
   - 4 ramos periódicos gerados automaticamente, cada um em arquivo isolado
+  - penalidade de -30 aplicada ao ruído secundário para contraste absoluto
 """
 
 import os
@@ -325,7 +326,7 @@ def varrer_para_mapa(cx_min, cx_max, cz_min, cz_max, n_processos=None, tamanho_l
 # 8. MAPA DE CALOR
 # =====================================================================
 def gerar_mapa_calor(grade_lattice, grade_necessidade, cx_min, cz_min,
-                      ilhas_conhecidas=None, caminho_saida="mapa_calor.png"):
+                     ilhas_conhecidas=None, caminho_saida="mapa_calor.png"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -344,16 +345,16 @@ def gerar_mapa_calor(grade_lattice, grade_necessidade, cx_min, cz_min,
     fig, axes = plt.subplots(1, 2, figsize=(18, 8))
 
     im0 = axes[0].imshow(grade_lattice.T, origin="lower", cmap="RdYlGn",
-                          extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
-                          vmin=-100, vmax=50)
+                         extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
+                         vmin=-100, vmax=50)
     axes[0].set_title("lattice_max — checagem REAL (confiável)")
     axes[0].set_xlabel("chunk X")
     axes[0].set_ylabel("chunk Z")
     fig.colorbar(im0, ax=axes[0], label="densidade máxima (>0 = tem bloco)")
 
     im1 = axes[1].imshow(grade_necessidade.T, origin="lower", cmap="RdYlGn",
-                          extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
-                          vmin=0, vmax=140)
+                         extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
+                         vmin=0, vmax=140)
     axes[1].set_title("necessidade — métrica NOVA (sob suspeita)")
     axes[1].set_xlabel("chunk X")
     axes[1].set_ylabel("chunk Z")
@@ -390,9 +391,9 @@ def exportar_csv(grade_lattice, grade_necessidade, grade_macro, cx_min, cz_min, 
         for i in range(largura):
             for j in range(altura):
                 writer.writerow([cx_min + i, cz_min + j,
-                                  f"{grade_lattice[i,j]:.4f}",
-                                  f"{grade_necessidade[i,j]:.4f}",
-                                  f"{grade_macro[i,j]:.4f}"])
+                                 f"{grade_lattice[i,j]:.4f}",
+                                 f"{grade_necessidade[i,j]:.4f}",
+                                 f"{grade_macro[i,j]:.4f}"])
     print(f"grade exportada em {caminho}")
 
 
@@ -400,10 +401,10 @@ def exportar_csv(grade_lattice, grade_necessidade, grade_macro, cx_min, cz_min, 
 # 8b. MAPA DE RESÍDUO — contribuição isolada das oitavas não-periódicas
 # =====================================================================
 def gerar_mapa_residuo(grade_residuo, cx_min, cz_min, ilhas_conhecidas=None,
-                        caminho_saida="mapa_residuo.png"):
-    """grade_residuo = necessidade - macro, célula a célula. Vermelho =
-    contribuição das oitavas não-periódicas mais negativa (atrapalhou);
-    verde = mais positiva (fez o trabalho pesado sozinha)."""
+                       caminho_saida="mapa_residuo.png"):
+    """grade_residuo = secundário puro com penalidade -30. Vermelho =
+    contribuição fraca/negativa (abaixo do limiar); verde = contribuição
+    forte o suficiente para superar a penalidade (ajuda a criar ilhas)."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -416,12 +417,12 @@ def gerar_mapa_residuo(grade_residuo, cx_min, cz_min, ilhas_conhecidas=None,
 
     fig, ax = plt.subplots(figsize=(11, 9))
     im = ax.imshow(grade_residuo.T, origin="lower", cmap="RdYlGn",
-                    extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
-                    vmin=-limite, vmax=limite)
-    ax.set_title("resíduo (necessidade − macro) — oitavas NÃO-periódicas")
+                   extent=[cx_min, cx_min + largura, cz_min, cz_min + altura],
+                   vmin=-limite, vmax=limite)
+    ax.set_title("resíduo SECUNDÁRIO (com penalidade -30)")
     ax.set_xlabel("chunk X")
     ax.set_ylabel("chunk Z")
-    fig.colorbar(im, ax=ax, label="vermelho = mais negativo   |   verde = mais positivo")
+    fig.colorbar(im, ax=ax, label="vermelho = fraco (<0)   |   verde = forte (>0)")
 
     if ilhas_conhecidas:
         for x, z, nome in ilhas_conhecidas:
@@ -462,14 +463,13 @@ def somar_oitavas_simples(colecao_oitavas, indices, x_off, z_off):
 
 
 def residuo_direto(cx: int, cz: int, indices_secundarias=OITAVAS_SECUNDARIAS) -> float:
-    """Ruído secundário puro — só as oitavas NÃO-dominantes, sem nunca
-    calcular necessidade nem macro. Bem definido por si só (diferente do
-    'necessidade - macro' antigo, que comparava dois máximos que podiam
-    vir de pontos ou geradores diferentes)."""
+    """Ruído secundário puro — só as oitavas NÃO-dominantes,
+    com a penalidade de -30 aplicada para alinhar com o corte do motor."""
     x_off, z_off = cx * 2, cz * 2
     t1 = somar_oitavas_simples(_colecao_noiseGen1, indices_secundarias, x_off, z_off)
     t2 = somar_oitavas_simples(_colecao_noiseGen2, indices_secundarias, x_off, z_off)
-    return max(max(t1), max(t2)) / 512.0
+    # APLICANDO A PENALIDADE DE -30 AQUI:
+    return (max(max(t1), max(t2)) / 512.0) - 30.0
 
 
 def processar_lote_residuo(lote, indices_secundarias=OITAVAS_SECUNDARIAS):
@@ -505,7 +505,7 @@ def varrer_residuo(cx_min, cx_max, cz_min, cz_max, n_processos=8, tamanho_lote=5
 
 
 def mapa_residuo_para_coordenada(x_bloco, z_bloco, raio_chunks=150, nome="ponto",
-                                  caminho_saida="mapa_residuo.png", n_processos=8):
+                                 caminho_saida="mapa_residuo.png", n_processos=8):
     """Digite a coordenada em blocos — devolve o mapa do ruído secundário
     (só as 14 oitavas não-dominantes) num raio (em chunks) ao redor dela."""
     cx_centro, cz_centro = x_bloco >> 4, z_bloco >> 4
@@ -524,7 +524,7 @@ def mapa_residuo_para_coordenada(x_bloco, z_bloco, raio_chunks=150, nome="ponto"
 # =====================================================================
 if __name__ == "__main__":
     X_BASE, Z_BASE, NOME_BASE = ILHAS_CONHECIDAS[0]
-    RAIO = 150
+    RAIO = 50
 
     DESLOCAMENTO_BLOCOS = PERIODO_CHUNKS * 16  # 3064 chunks * 16 = 49024 blocos
 
@@ -539,7 +539,7 @@ if __name__ == "__main__":
         cx_centro, cz_centro = x_ramo >> 4, z_ramo >> 4
         print(f"\n=== Ramo {indice}: bloco ({x_ramo}, {z_ramo}) — chunk ({cx_centro}, {cz_centro}) ===")
 
-        # ✅ CORRIGIDO: Chamando a varredura dedicada só do secundário (sem lattice_max)
+        # ✅ Chamando a varredura dedicada só do secundário (sem lattice_max)
         grade_residuo = varrer_residuo(
             cx_centro - RAIO, cx_centro + RAIO, cz_centro - RAIO, cz_centro + RAIO,
             n_processos=8,
@@ -547,7 +547,7 @@ if __name__ == "__main__":
 
         marcador = [(x_ramo, z_ramo, NOME_BASE)]
         
-        # ✅ CORRIGIDO: Gerando o mapa usando a função específica de resíduo
+        # ✅ Gerando o mapa usando a função específica de resíduo
         gerar_mapa_residuo(
             grade_residuo, cx_centro - RAIO, cz_centro - RAIO,
             ilhas_conhecidas=marcador, caminho_saida=f"mapa_secundario_{indice}.png"
